@@ -149,13 +149,13 @@ void *thread_check_top_big_bottom(void *data) {
             int next_end_index_2 = index_data->end_index;
 
             //初始化结构体， 进入递归
-            struct thread_top_big_bottom_check_strcut *next_index_data_1 = (struct thread_top_big_bottom_check_strcut *) malloc(
+            struct thread_top_big_bottom_check_strcut * next_index_data_1 = (struct thread_top_big_bottom_check_strcut *) malloc(
                     sizeof(struct thread_top_big_bottom_check_strcut));
             next_index_data_1->start_index = next_start_index_1;
             next_index_data_1->end_index = next_end_index_1;
             next_index_data_1->left_distance_array = index_data->left_distance_array;
             next_index_data_1->top_big_bottom = index_data->top_big_bottom;
-            thread_check_top_big_bottom((void *) next_end_index_1);
+            thread_check_top_big_bottom((void *) next_index_data_1);
 
             //初始化结构体， 进入递归
             struct thread_top_big_bottom_check_strcut * next_index_data_2 = (struct thread_top_big_bottom_check_strcut *) malloc(
