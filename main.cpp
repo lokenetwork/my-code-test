@@ -108,7 +108,7 @@ void check_top_big_bottom(bool * top_big_bottom,int I_rows,int I_cols,struct pic
     struct thread_top_big_bottom_check_strcut *index_data = (struct thread_top_big_bottom_check_strcut *) malloc(
             sizeof(struct thread_top_big_bottom_check_strcut));
     index_data->start_index = 0;
-    index_data->end_index = I_rows;
+    index_data->end_index = I_rows-1;
     index_data->left_distance_array = left_distance_array;
     index_data->top_big_bottom = top_big_bottom;
 
@@ -124,29 +124,34 @@ void check_top_big_bottom(bool * top_big_bottom,int I_rows,int I_cols,struct pic
 }
 
 void *thread_check_top_big_bottom(void *data) {
+
     struct thread_top_big_bottom_check_strcut *index_data = (struct thread_top_big_bottom_check_strcut *) data;
     // printf("start_index is %d\n", index_data->start_index);
     //   printf("left_distance_array is %d\n", index_data->left_distance_array[1]);
     float center_value;
 
     //判断是奇数还是偶数
-    if (index_data->end_index % 2 == 0) {
+    if ( ( (index_data->end_index+1) % 2 ) == 0) {
         center_value =
                 (index_data->left_distance_array[(index_data->end_index / 2) - 1] +
                  index_data->left_distance_array[(index_data->end_index / 2)]) / 2;
     } else {
-        center_value = index_data->left_distance_array[(index_data->end_index - 1) / 2];
+        center_value = index_data->left_distance_array[(index_data->end_index) / 2];
 
         //start跟end之间超过5个像素再进入递归，5是阀值
 
         int next_start_index_1 = 0;
-        int next_end_index_1 = (index_data->end_index - 1) / 2;
+        int next_end_index_1 = (index_data->end_index) / 2;
 
 
         if (min_center_calculate_num <= (next_end_index_1 - next_start_index_1 - 1)) {
+            //这里应该用多线程抛离出来计算，代码更清晰
+            //这里的线程join，后面再做成树的结构来join
 
-            int next_start_index_2 = (index_data->end_index - 1) / 2;
+            int next_start_index_2 = (index_data->end_index) / 2;
             int next_end_index_2 = index_data->end_index;
+            int thread_rest;
+
 
             //初始化结构体， 进入递归
             struct thread_top_big_bottom_check_strcut * next_index_data_1 = (struct thread_top_big_bottom_check_strcut *) malloc(
@@ -155,7 +160,11 @@ void *thread_check_top_big_bottom(void *data) {
             next_index_data_1->end_index = next_end_index_1;
             next_index_data_1->left_distance_array = index_data->left_distance_array;
             next_index_data_1->top_big_bottom = index_data->top_big_bottom;
-            thread_check_top_big_bottom((void *) next_index_data_1);
+            pthread_t thread_id;
+            thread_rest = pthread_create(&thread_id, NULL, thread_check_top_big_bottom, next_index_data_1);
+            if (0 != thread_rest) {
+                printf("创建线程失败\n");
+            }
 
             //初始化结构体， 进入递归
             struct thread_top_big_bottom_check_strcut * next_index_data_2 = (struct thread_top_big_bottom_check_strcut *) malloc(
@@ -164,20 +173,23 @@ void *thread_check_top_big_bottom(void *data) {
             next_index_data_2->end_index = next_end_index_2;
             next_index_data_2->left_distance_array = index_data->left_distance_array;
             next_index_data_2->top_big_bottom = index_data->top_big_bottom;
-            thread_check_top_big_bottom((void *) next_index_data_2);
+            pthread_t thread_id_2;
+            thread_rest = pthread_create(&thread_id, NULL, thread_check_top_big_bottom, next_index_data_2);
+
+            if (0 != thread_rest) {
+                printf("创建线程失败\n");
+            }
         }
 
     }
 
     if (index_data->left_distance_array[index_data->end_index] > center_value ||
         index_data->left_distance_array[index_data->start_index] < center_value) {
-        index_data->top_big_bottom = false;
+        *((*index_data).top_big_bottom) = false;
     }
 
     free(index_data);
-    //start_index 跟end_index 产生变化
 
-    // pthread_create(&thread_id_1, NULL, (void *) thread_check_top_big_bottom, &index_data);
 }
 
 int transform_to_mstrcut(Mat &I, struct picture_pix **first_pix) {
