@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <opencv2/opencv.hpp>
+#include <zconf.h>
 
 using namespace cv;
 using namespace std;
@@ -25,29 +26,17 @@ int transform_to_mstrcut(Mat &I, struct picture_pix **pic_pix);
 //todo，判断当前像素是否是字体像素，以后可能要根据前后的连续像素做判断，先封装成函数
 int check_is_word_pix(struct picture_pix *backgound_pix, struct picture_pix *current_pix);
 
-int thread_check_top_big_bottom(int test) {
+void *thread_check_top_big_bottom(void *arg);
+void check_top_big_bottom(bool * top_big_bottom,int I_rows,int I_cols,struct picture_pix *first_pix);
 
-
-    /*
-    //判断是奇数还是偶数
-    if (end_value_index % 2 == 0) {
-        center_value =
-                (left_distance_array[(end_value_index / 2) - 1] + left_distance_array[(end_value_index / 2)]) / 2;
-    } else {
-        center_value = left_distance_array[(end_value_index - 1) / 2];
-    }
-    if (left_distance_array[end_value_index] > center_value ||
-        left_distance_array[start_value_index] < center_value) {
-        top_big_bottom = false;
-    }
-     */
-
-    //start_index 跟end_index 产生变化
-
-    // pthread_create(&thread_id_1, NULL, (void *) thread_check_top_big_bottom, &index_data);
-    return 0;
-}
-
+struct thread_top_big_bottom_check_strcut {
+    int start_index;
+    int end_index;
+    int *left_distance_array;
+    bool *top_big_bottom;
+};
+//二值化计算像素数量最少值，超过这阀值做中间计算才有价值。
+int min_center_calculate_num = 5;
 
 int main(int argc, char **argv) {
 
@@ -71,19 +60,31 @@ int main(int argc, char **argv) {
     transform_to_mstrcut(I, &first_pix);
 
     //todo,二值计算要封装成函数
+    bool  top_big_bottom = true;
+    check_top_big_bottom(&top_big_bottom,I.rows,I.cols,first_pix);
+
+
+
+    printf("It is end\n");
+
+    return 0;
+
+}
+//判断这个左距离是不是从大到小
+void check_top_big_bottom(bool * top_big_bottom,int I_rows,int I_cols,struct picture_pix *first_pix){
 
     //获取左侧第一个字体像素相对于行首像素的偏移距离
-    int left_distance_array[I.rows];
+    int left_distance_array[I_rows];
     struct picture_pix *temp_pix = first_pix;
     int currnt_left_distance_index = 0;
-    for (int i = 1; i <= I.cols * I.rows; ++i) {
+    for (int i = 1; i <= I_rows * I_rows; ++i) {
         //找到一个左侧字体像素，立即跳到下一行
         if (true == temp_pix->is_word_pix) {
 
             left_distance_array[currnt_left_distance_index] = temp_pix->start_offset;
             currnt_left_distance_index++;
             int current_row = temp_pix->location_row;
-            for (int j = 0; j < I.cols; ++j) {
+            for (int j = 0; j < I_cols; ++j) {
                 temp_pix = temp_pix->next_pix;
 
                 //已经跳到下一行
@@ -101,42 +102,82 @@ int main(int argc, char **argv) {
     }
 
 
-    bool top_big_bottom = true;
-    //中间值
-    float center_value;
-    //最后元素的下标
-    int end_value_index = I.rows;
-    int start_value_index = 0;
-
-    //二值化计算像素数量最少值，超过这阀值做中间计算才有价值。
-    int min_center_calculate_num = 5;
-
     pthread_t thread_id_1;
 
-    struct thread_top_big_bottom_check_strcut {
-        int start_index;
-        int end_index;
-    };
 
-
-    //循环判断这个左距离是不是从大到小
-
-
-    struct thread_top_big_bottom_check_strcut index_data;
-    index_data.start_index = 0;
-    index_data.end_index = I.rows;
-
-
+    struct thread_top_big_bottom_check_strcut *index_data = (struct thread_top_big_bottom_check_strcut *) malloc(
+            sizeof(struct thread_top_big_bottom_check_strcut));
+    index_data->start_index = 0;
+    index_data->end_index = I_rows;
+    index_data->left_distance_array = left_distance_array;
+    index_data->top_big_bottom = top_big_bottom;
 
     //start_index 跟end_index 产生变化
-    int test;
-    int test2 = 45;
-    test = pthread_create(&thread_id_1, NULL, thread_check_top_big_bottom, 15);
+    int rest = pthread_create(&thread_id_1, NULL, thread_check_top_big_bottom, index_data);
+    if (0 != rest) {
+        printf("创建线程失败\n");
+    }
+
+    pthread_join(thread_id_1,NULL);
+
+    sleep(5);
+}
+
+void *thread_check_top_big_bottom(void *data) {
+    struct thread_top_big_bottom_check_strcut *index_data = (struct thread_top_big_bottom_check_strcut *) data;
+    // printf("start_index is %d\n", index_data->start_index);
+    //   printf("left_distance_array is %d\n", index_data->left_distance_array[1]);
+    float center_value;
+
+    //判断是奇数还是偶数
+    if (index_data->end_index % 2 == 0) {
+        center_value =
+                (index_data->left_distance_array[(index_data->end_index / 2) - 1] +
+                 index_data->left_distance_array[(index_data->end_index / 2)]) / 2;
+    } else {
+        center_value = index_data->left_distance_array[(index_data->end_index - 1) / 2];
+
+        //start跟end之间超过5个像素再进入递归，5是阀值
+
+        int next_start_index_1 = 0;
+        int next_end_index_1 = (index_data->end_index - 1) / 2;
 
 
-    printf("sdsdsd\n");
-    return 0;
+        if (min_center_calculate_num <= (next_end_index_1 - next_start_index_1 - 1)) {
 
+            int next_start_index_2 = (index_data->end_index - 1) / 2;
+            int next_end_index_2 = index_data->end_index;
+
+            //初始化结构体， 进入递归
+            struct thread_top_big_bottom_check_strcut *next_index_data_1 = (struct thread_top_big_bottom_check_strcut *) malloc(
+                    sizeof(struct thread_top_big_bottom_check_strcut));
+            next_index_data_1->start_index = next_start_index_1;
+            next_index_data_1->end_index = next_end_index_1;
+            next_index_data_1->left_distance_array = index_data->left_distance_array;
+            next_index_data_1->top_big_bottom = index_data->top_big_bottom;
+            thread_check_top_big_bottom((void *) next_end_index_1);
+
+            //初始化结构体， 进入递归
+            struct thread_top_big_bottom_check_strcut * next_index_data_2 = (struct thread_top_big_bottom_check_strcut *) malloc(
+                    sizeof(struct thread_top_big_bottom_check_strcut));
+            next_index_data_2->start_index = next_start_index_2;
+            next_index_data_2->end_index = next_end_index_2;
+            next_index_data_2->left_distance_array = index_data->left_distance_array;
+            next_index_data_2->top_big_bottom = index_data->top_big_bottom;
+            thread_check_top_big_bottom((void *) next_index_data_2);
+        }
+
+    }
+
+    if (index_data->left_distance_array[index_data->end_index] > center_value ||
+        index_data->left_distance_array[index_data->start_index] < center_value) {
+        index_data->top_big_bottom = false;
+    }
+
+    free(index_data);
+    //start_index 跟end_index 产生变化
+
+    // pthread_create(&thread_id_1, NULL, (void *) thread_check_top_big_bottom, &index_data);
 }
 
 int transform_to_mstrcut(Mat &I, struct picture_pix **first_pix) {
