@@ -25,7 +25,7 @@ int transform_to_mstrcut(Mat &I, struct picture_pix **pic_pix);
 //todo，判断当前像素是否是字体像素，以后可能要根据前后的连续像素做判断，先封装成函数
 int check_is_word_pix(struct picture_pix *backgound_pix, struct picture_pix *current_pix);
 
-void thread_check_top_big_bottom (struct thread_top_big_bottom_check_strcut * data) {
+int thread_check_top_big_bottom(struct thread_top_big_bottom_check_strcut *data) {
 
 
     /*
@@ -45,8 +45,8 @@ void thread_check_top_big_bottom (struct thread_top_big_bottom_check_strcut * da
     //start_index 跟end_index 产生变化
 
     // pthread_create(&thread_id_1, NULL, (void *) thread_check_top_big_bottom, &index_data);
+    return 0;
 }
-
 
 
 int main(int argc, char **argv) {
@@ -129,8 +129,8 @@ int main(int argc, char **argv) {
 
 
     //start_index 跟end_index 产生变化
-
-    pthread_create(&thread_id_1, NULL, (void *) thread_check_top_big_bottom, &index_data);
+    int test;
+    test = pthread_create(&thread_id_1, NULL, thread_check_top_big_bottom, &index_data);
 
 
     printf("sdsdsd\n");
