@@ -18,11 +18,36 @@ struct picture_pix {
 
 };
 
+
 //把openc的矩阵转成咱们的结构体
-int transform_to_mstrcut(Mat &I, struct picture_pix *pic_pix);
+int transform_to_mstrcut(Mat &I, struct picture_pix **pic_pix);
 
 //todo，判断当前像素是否是字体像素，以后可能要根据前后的连续像素做判断，先封装成函数
 int check_is_word_pix(struct picture_pix *backgound_pix, struct picture_pix *current_pix);
+
+void thread_check_top_big_bottom (struct thread_top_big_bottom_check_strcut * data) {
+
+
+    /*
+    //判断是奇数还是偶数
+    if (end_value_index % 2 == 0) {
+        center_value =
+                (left_distance_array[(end_value_index / 2) - 1] + left_distance_array[(end_value_index / 2)]) / 2;
+    } else {
+        center_value = left_distance_array[(end_value_index - 1) / 2];
+    }
+    if (left_distance_array[end_value_index] > center_value ||
+        left_distance_array[start_value_index] < center_value) {
+        top_big_bottom = false;
+    }
+     */
+
+    //start_index 跟end_index 产生变化
+
+    // pthread_create(&thread_id_1, NULL, (void *) thread_check_top_big_bottom, &index_data);
+}
+
+
 
 int main(int argc, char **argv) {
 
@@ -42,17 +67,78 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    struct picture_pix *first_pix = (struct picture_pix *) malloc(sizeof(struct picture_pix));
-    transform_to_mstrcut(I, first_pix);
+    struct picture_pix *first_pix;
+    transform_to_mstrcut(I, &first_pix);
 
-    cv::Mat clone_i = I.clone();
-    J = ScanImageAndReduceC(clone_i);
-    imwrite("/home/loken/ClionProjects/opencv_demo/cpp-test/A_2.jpg", J);
+    //todo,二值计算要封装成函数
 
+    //获取左侧第一个字体像素相对于行首像素的偏移距离
+    int left_distance_array[I.rows];
+    struct picture_pix *temp_pix = first_pix;
+    int currnt_left_distance_index = 0;
+    for (int i = 1; i <= I.cols * I.rows; ++i) {
+        //找到一个左侧字体像素，立即跳到下一行
+        if (true == temp_pix->is_word_pix) {
+
+            left_distance_array[currnt_left_distance_index] = temp_pix->start_offset;
+            currnt_left_distance_index++;
+            int current_row = temp_pix->location_row;
+            for (int j = 0; j < I.cols; ++j) {
+                temp_pix = temp_pix->next_pix;
+
+                //已经跳到下一行
+                if (current_row != temp_pix->location_row) {
+                    //返回
+                    break;
+                } else {
+                    //注意，这里不是下一行 才加。
+                    i++;
+                }
+            }
+        } else {
+            temp_pix = temp_pix->next_pix;
+        }
+    }
+
+
+    bool top_big_bottom = true;
+    //中间值
+    float center_value;
+    //最后元素的下标
+    int end_value_index = I.rows;
+    int start_value_index = 0;
+
+    //二值化计算像素数量最少值，超过这阀值做中间计算才有价值。
+    int min_center_calculate_num = 5;
+
+    pthread_t thread_id_1;
+
+    struct thread_top_big_bottom_check_strcut {
+        int start_index;
+        int end_index;
+    };
+
+
+    //循环判断这个左距离是不是从大到小
+
+
+    struct thread_top_big_bottom_check_strcut index_data;
+    index_data.start_index = 0;
+    index_data.end_index = I.rows;
+
+
+
+    //start_index 跟end_index 产生变化
+
+    pthread_create(&thread_id_1, NULL, (void *) thread_check_top_big_bottom, &index_data);
+
+
+    printf("sdsdsd\n");
+    return 0;
 
 }
 
-int transform_to_mstrcut(Mat &I, struct picture_pix *first_pix) {
+int transform_to_mstrcut(Mat &I, struct picture_pix **first_pix) {
     // accept only char type matrices
     CV_Assert(I.depth() == CV_8U);
 
@@ -62,12 +148,10 @@ int transform_to_mstrcut(Mat &I, struct picture_pix *first_pix) {
     int nCols = I.cols * channels;
 
     if (I.isContinuous()) {
-        //cout << "I.isContinuous() is true " << endl;
         nCols *= nRows;
         nRows = 1;
         int i, j;
         uchar *p;
-        //todo,int 可能存不下所有像素，以后想办法
         int current_pix = 1; //现在遍历到那个像素了
         int pix_number = I.rows * I.cols; //全部的像素数量
         for (i = 0; i < nRows; ++i) {
@@ -78,86 +162,48 @@ int transform_to_mstrcut(Mat &I, struct picture_pix *first_pix) {
             background_pix.G = p[1];
             background_pix.R = p[2];
 
-            struct picture_pix * pix_array[pix_number];
+            struct picture_pix *pix_array[pix_number];
 
             for (int current_pix_index = 1; current_pix_index <= pix_number; ++current_pix_index) {
-                printf("current_pix_index is %d\n",current_pix_index);
 
-                pix_array[current_pix_index-1] = (struct picture_pix *) malloc(sizeof(struct picture_pix));
+                pix_array[current_pix_index - 1] = (struct picture_pix *) malloc(sizeof(struct picture_pix));
 
                 int B_index = current_pix_index * 3 - 3;
                 int G_index = current_pix_index * 3 - 2;
                 int R_index = current_pix_index * 3 - 1;
 
-                printf("p[B_index] is %d ,p[G_index] is %d ,p[R_index] is %d \n",p[B_index],p[G_index],p[R_index]);
 
-                pix_array[current_pix_index-1]->B = p[B_index];
-                pix_array[current_pix_index-1]->G = p[G_index];
-                pix_array[current_pix_index-1]->R = p[R_index];
-                pix_array[current_pix_index-1]->location_row = ceil(current_pix_index / I.cols);
-                pix_array[current_pix_index-1]->start_offset = current_pix_index - (pix_array[current_pix_index-1]->location_row * I.cols);
-                check_is_word_pix(&background_pix, pix_array[current_pix_index-1]);
+                pix_array[current_pix_index - 1]->B = p[B_index];
+                pix_array[current_pix_index - 1]->G = p[G_index];
+                pix_array[current_pix_index - 1]->R = p[R_index];
 
-                /*
-                if (1 == current_pix_index) {
-                    //切换头指针指向
-                    struct picture_pix *first_pix_back_free = first_pix;
-                    first_pix = current_pix;
-                    //free(first_pix_back_free);
-                }
+                float temp_location_row = (float) current_pix_index / (float) I.cols;
+                pix_array[current_pix_index - 1]->location_row = (int) ceil(temp_location_row);
 
-                //获取前一个像素的指向
-                if (1 != current_pix_index) {
-                    struct picture_pix *current_prev_pix = first_pix;
-                    //通过第一个元素获取前一个元素的指针
-                    for (int i = 1; i < (current_pix_index - 1); i++) {
-                        current_prev_pix = current_prev_pix->next_pix;
-                    }
-                    current_pix->prev_pix = current_prev_pix;
-                }
-
-                //遍历到最后一个元素，连接上首像素
-                if (current_pix_index == pix_number) {
-                    first_pix->prev_pix = current_pix;
-                }
-                else {
-                    int current_next_pix_index = current_pix_index + 1;
-
-                    struct picture_pix *next_pix = (struct picture_pix *) calloc(1, sizeof(struct picture_pix));
-
-                    int next_B_index = current_next_pix_index * 3 - 3;
-                    int next_G_index = current_next_pix_index * 3 - 2;
-                    int next_R_index = current_next_pix_index * 3 - 1;
-                    next_pix->B = p[next_B_index];
-                    next_pix->G = p[next_G_index];
-                    next_pix->R = p[next_R_index];
-                    next_pix->location_row = ceil(current_next_pix_index / I.cols);
-                    next_pix->start_offset = current_next_pix_index - (next_pix->location_row * I.cols);
-                    check_is_word_pix(&background_pix, next_pix);
-
-                    current_pix->next_pix = next_pix;
-                }
-                 */
+                pix_array[current_pix_index - 1]->start_offset =
+                        current_pix_index - 1 - ((pix_array[current_pix_index - 1]->location_row - 1) * I.cols);
+                check_is_word_pix(&background_pix, pix_array[current_pix_index - 1]);
 
             }
             //再循环一次做指针指向
             for (int current_pix_index = 0; current_pix_index < pix_number; ++current_pix_index) {
                 //头尾指向
-                if( 0 == current_pix_index  ){
-                    pix_array[current_pix_index]->prev_pix = pix_array[pix_number-1];
-                }else{
-                    pix_array[current_pix_index]->prev_pix = pix_array[current_pix_index-1];
+                if (0 == current_pix_index) {
+                    pix_array[current_pix_index]->prev_pix = pix_array[pix_number - 1];
+                } else {
+                    pix_array[current_pix_index]->prev_pix = pix_array[current_pix_index - 1];
                 }
 
-                if( (pix_number-1) == current_pix_index  ){
+                if ((pix_number - 1) == current_pix_index) {
                     pix_array[current_pix_index]->next_pix = pix_array[0];
-                }else{
-                    pix_array[current_pix_index]->next_pix = pix_array[current_pix_index+1];
+                } else {
+                    pix_array[current_pix_index]->next_pix = pix_array[current_pix_index + 1];
                 }
 
             }
+            *first_pix = pix_array[0];
 
-            first_pix = pix_array[0];
+
         }
         //todo，非连续的图片暂时不处理
     } else {
@@ -180,16 +226,16 @@ int check_is_word_pix(struct picture_pix *backgound_pix, struct picture_pix *cur
     int R_gap = abs(backgound_pix->R - current_pix->R);
     //先检测单色的差距
     if (B_gap > single_max_gap || G_gap > single_max_gap || R_gap > single_max_gap) {
-        current_pix->is_word_pix = false;
+        current_pix->is_word_pix = true;
 
     } else if ((B_gap > double_max_gap && G_gap > double_max_gap) ||
                (B_gap > double_max_gap && R_gap > double_max_gap) ||
                (G_gap > double_max_gap && R_gap > double_max_gap)) {
-        current_pix->is_word_pix = false;
-    } else if (B_gap > three_max_gap || G_gap > three_max_gap || R_gap > three_max_gap) {
-        current_pix->is_word_pix = false;
-    } else {
         current_pix->is_word_pix = true;
+    } else if (B_gap > three_max_gap || G_gap > three_max_gap || R_gap > three_max_gap) {
+        current_pix->is_word_pix = true;
+    } else {
+        current_pix->is_word_pix = false;
     };
 
     return 0;
