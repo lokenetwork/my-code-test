@@ -30,8 +30,7 @@ int check_is_word_pix(struct picture_pix *backgound_pix, struct picture_pix *cur
 
 void *thread_check_top_big_bottom(void *arg);
 
-void check_top_big_bottom(bool *top_big_bottom, int I_rows, int I_cols, struct picture_pix *first_pix);
-
+void check_top_big_bottom(bool *top_big_bottom, int I_rows, int I_cols, struct picture_pix *first_pix,pthread_cond_t * check_top_big_bottom_cond,int *tourch_min_center_calculate_num_count);
 struct thread_top_big_bottom_check_strcut {
     int start_index;
     int end_index;
@@ -68,24 +67,24 @@ int main(int argc, char **argv) {
     //todo,二值计算要封装成函数
     bool top_big_bottom = true;
     //触碰到最小阀值的次数，必须触碰两次
-    int tourch_min_center_calculate_num_count = 0;
+    int * tourch_min_center_calculate_num_count =  (int *) malloc(sizeof(int));
+    *tourch_min_center_calculate_num_count = 0;
     pthread_mutex_t check_top_big_bottom_cond_mtx = PTHREAD_MUTEX_INITIALIZER;
     //新建一个条件锁，等待被触发
     pthread_cond_t check_top_big_bottom_cond = PTHREAD_COND_INITIALIZER;
     //加锁
     pthread_mutex_lock(&check_top_big_bottom_cond_mtx);
 
-    check_top_big_bottom(&top_big_bottom, I.rows, I.cols, first_pix,&check_top_big_bottom_cond,&tourch_min_center_calculate_num_count);
+    check_top_big_bottom(&top_big_bottom, I.rows, I.cols, first_pix,&check_top_big_bottom_cond,tourch_min_center_calculate_num_count);
 
     //结果校验while，pthread_cond_wait可能被意外唤醒
-    while (tourch_min_center_calculate_num_count < 2) {
+    while (*tourch_min_center_calculate_num_count < 2) {
         //阻塞等待子线程通知，触碰两次最小阀值
         pthread_cond_wait(&check_top_big_bottom_cond, &check_top_big_bottom_cond_mtx);
     }
 
     printf("It is end\n");
 
-    sleep(1500);
 
     return 0;
 
@@ -193,7 +192,7 @@ void check_top_big_bottom(bool *top_big_bottom, int I_rows, int I_cols, struct p
     }
 
     //pthread_join(thread_id_check_left_top_big_bottom, NULL);
-    pthread_join(thread_id_check_right_top_big_bottom, NULL);
+    //pthread_join(thread_id_check_right_top_big_bottom, NULL);
 
 }
 
@@ -226,6 +225,8 @@ void *thread_check_top_big_bottom(void *data) {
         next_index_data_1->end_index = next_end_index_1;
         next_index_data_1->distance_array = index_data->distance_array;
         next_index_data_1->top_big_bottom = index_data->top_big_bottom;
+        next_index_data_1->check_top_big_bottom_cond = index_data->check_top_big_bottom_cond;
+        next_index_data_1->tourch_min_center_calculate_num_count = index_data->tourch_min_center_calculate_num_count;
 
         //thread_check_top_big_bottom(next_index_data_1);
         pthread_t thread_id;
@@ -244,6 +245,8 @@ void *thread_check_top_big_bottom(void *data) {
         next_index_data_2->end_index = next_end_index_2;
         next_index_data_2->distance_array = index_data->distance_array;
         next_index_data_2->top_big_bottom = index_data->top_big_bottom;
+        next_index_data_2->check_top_big_bottom_cond = index_data->check_top_big_bottom_cond;
+        next_index_data_2->tourch_min_center_calculate_num_count = index_data->tourch_min_center_calculate_num_count;
 
         //thread_check_top_big_bottom(next_index_data_2);
         pthread_t thread_id_2;
@@ -255,7 +258,8 @@ void *thread_check_top_big_bottom(void *data) {
 
     }else{
         //触碰阀值
-        __sync_fetch_and_add(index_data->tourch_min_center_calculate_num_count, 1);
+        //*(index_data->tourch_min_center_calculate_num_count) += 1;
+        __sync_fetch_and_add((*index_data).tourch_min_center_calculate_num_count, 1);
         if( 2 == *(index_data->tourch_min_center_calculate_num_count)  ){
             pthread_cond_signal(index_data->check_top_big_bottom_cond);
         }
@@ -265,7 +269,8 @@ void *thread_check_top_big_bottom(void *data) {
         index_data->distance_array[index_data->start_index] < center_value) {
         *((*index_data).top_big_bottom) = false;
     }
-    free(index_data);
+
+    //free(index_data);
 
 }
 
