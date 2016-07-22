@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <opencv2/opencv.hpp>
 #include <zconf.h>
+#include <cerrno>
 
 using namespace cv;
 using namespace std;
-
+#define handle_error_en(en, msg) \
+               do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0)
 //图片像素结构体
 struct picture_pix {
     int B;
@@ -48,7 +50,7 @@ int main(int argc, char **argv) {
     Mat I, J;
 
     I = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-    cout << "E = " << endl << " " << I << endl << endl;
+    //cout << "E = " << endl << " " << I << endl << endl;
 
 
     if (!I.data) {
@@ -115,26 +117,23 @@ void check_top_big_bottom(bool * top_big_bottom,int I_rows,int I_cols,struct pic
     //start_index 跟end_index 产生变化
     int rest = pthread_create(&thread_id_1, NULL, thread_check_top_big_bottom, index_data);
     if (0 != rest) {
-        printf("创建线程失败\n");
+        printf("创建线程失败 ----\n");
     }
 
-    pthread_join(thread_id_1,NULL);
 
-    sleep(5);
+    sleep(15);
 }
 
 void *thread_check_top_big_bottom(void *data) {
 
     struct thread_top_big_bottom_check_strcut *index_data = (struct thread_top_big_bottom_check_strcut *) data;
-    // printf("start_index is %d\n", index_data->start_index);
-    //   printf("left_distance_array is %d\n", index_data->left_distance_array[1]);
     float center_value;
-
     //判断是奇数还是偶数
     if ( ( (index_data->end_index+1) % 2 ) == 0) {
         center_value =
                 (index_data->left_distance_array[(index_data->end_index / 2) - 1] +
                  index_data->left_distance_array[(index_data->end_index / 2)]) / 2;
+        //todo,偶数后面再处理
     } else {
         center_value = index_data->left_distance_array[(index_data->end_index) / 2];
 
@@ -146,12 +145,11 @@ void *thread_check_top_big_bottom(void *data) {
 
         if (min_center_calculate_num <= (next_end_index_1 - next_start_index_1 - 1)) {
             //这里应该用多线程抛离出来计算，代码更清晰
-            //这里的线程join，后面再做成树的结构来join
+            //todo,这里的线程join，后面再做成树的结构来join
 
             int next_start_index_2 = (index_data->end_index) / 2;
             int next_end_index_2 = index_data->end_index;
             int thread_rest;
-
 
             //初始化结构体， 进入递归
             struct thread_top_big_bottom_check_strcut * next_index_data_1 = (struct thread_top_big_bottom_check_strcut *) malloc(
@@ -163,7 +161,7 @@ void *thread_check_top_big_bottom(void *data) {
             pthread_t thread_id;
             thread_rest = pthread_create(&thread_id, NULL, thread_check_top_big_bottom, next_index_data_1);
             if (0 != thread_rest) {
-                printf("创建线程失败\n");
+                handle_error_en(thread_rest, "pthread_create 3");
             }
 
             //初始化结构体， 进入递归
@@ -174,10 +172,10 @@ void *thread_check_top_big_bottom(void *data) {
             next_index_data_2->left_distance_array = index_data->left_distance_array;
             next_index_data_2->top_big_bottom = index_data->top_big_bottom;
             pthread_t thread_id_2;
-            thread_rest = pthread_create(&thread_id, NULL, thread_check_top_big_bottom, next_index_data_2);
+            int thread_rest_2 = pthread_create(&thread_id_2, NULL, thread_check_top_big_bottom, next_index_data_2);
 
-            if (0 != thread_rest) {
-                printf("创建线程失败\n");
+            if (0 != thread_rest_2) {
+                handle_error_en(thread_rest_2, "pthread_create 4");
             }
         }
 
